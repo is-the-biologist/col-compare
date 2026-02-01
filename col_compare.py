@@ -868,7 +868,6 @@ Examples:
             "Available categories: "
             + ", ".join(EXPENSE_CATEGORIES)
         ))
-
     parser.add_argument (
         "--database", default=DEFAULT_DB_PATH, metavar="PATH",
         help="Path to location database JSON file (default: database/locations_v1.json)",
