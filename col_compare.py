@@ -1078,8 +1078,12 @@ def print_comparison(
     family: str,
     income: Optional[float] = None,
     method: str = "sqrt",
+    excluded: Optional[set[str]] = None,
 ) -> None:
     """Print a formatted comparison table."""
+    excluded = excluded or set()
+    active_categories = [c for c in EXPENSE_CATEGORIES if c not in excluded]
+
     family_label = FAMILY_LABELS.get(family, family)
     names = [loc["name"] for loc in locations]
 
@@ -1088,6 +1092,8 @@ def print_comparison(
     print("=" * 60)
     print("  vs  ".join(names))
     print(f"Family type: {family_label}")
+    if excluded:
+        print(f"Excluded:    {', '.join(sorted(excluded))}")
     print()
 
     # --- Headline income equivalence ---
@@ -1134,7 +1140,7 @@ def print_comparison(
 
     total_by_loc: list[float] = [0.0] * len(locations)
 
-    for cat in EXPENSE_CATEGORIES:
+    for cat in active_categories:
         row = f"{cat:<{cat_width}}"
         vals: list[Optional[float]] = []
         for loc in locations:
@@ -1203,13 +1209,22 @@ def print_comparison(
     print()
 
 
-def print_single_location(loc: dict, family: str) -> None:
+def print_single_location(
+    loc: dict,
+    family: str,
+    excluded: Optional[set[str]] = None,
+) -> None:
     """Print data for a single location."""
+    excluded = excluded or set()
+    active_categories = [c for c in EXPENSE_CATEGORIES if c not in excluded]
+
     family_label = FAMILY_LABELS.get(family, family)
     print()
     print(f"Living Wage Data: {loc['name']}")
     print("=" * 50)
     print(f"Family type: {family_label}")
+    if excluded:
+        print(f"Excluded:    {', '.join(sorted(excluded))}")
     print()
 
     wage = loc["wages"].get(family)
@@ -1226,7 +1241,7 @@ def print_single_location(loc: dict, family: str) -> None:
 
     print()
     print("  Annual Expenses:")
-    for cat in EXPENSE_CATEGORIES:
+    for cat in active_categories:
         v = loc["expenses"].get(cat, {}).get(family)
         if v is not None:
             print(f"    {cat:<22} {format_dollar(v)}")
@@ -1324,8 +1339,33 @@ Examples:
             "engel (non-homothetic Engel curve)"
         ),
     )
+    parser.add_argument(
+        "--exclude", nargs="+", metavar="CATEGORY",
+        help=(
+            "Exclude one or more expense categories from the comparison. "
+            "Available categories: "
+            + ", ".join(EXPENSE_CATEGORIES)
+        ),
+    )
 
     return parser
+
+
+def resolve_excluded_categories(raw: list[str]) -> set[str]:
+    """Resolve user-provided category names to canonical EXPENSE_CATEGORIES names.
+
+    Matching is case-insensitive. Exits with an error for unrecognized names.
+    """
+    lookup = {cat.lower(): cat for cat in EXPENSE_CATEGORIES}
+    resolved: set[str] = set()
+    for name in raw:
+        canon = lookup.get(name.lower())
+        if canon is None:
+            print(f"Error: Unknown expense category '{name}'.")
+            print(f"Available categories: {', '.join(EXPENSE_CATEGORIES)}")
+            sys.exit(1)
+        resolved.add(canon)
+    return resolved
 
 
 def main() -> None:
@@ -1379,10 +1419,11 @@ def main() -> None:
 
     # Display
     family = args.family
+    excluded = resolve_excluded_categories(args.exclude) if args.exclude else set()
     if len(location_data) == 1:
-        print_single_location(location_data[0], family)
+        print_single_location(location_data[0], family, excluded=excluded)
     else:
-        print_comparison(location_data, family, income=args.income, method=args.method)
+        print_comparison(location_data, family, income=args.income, method=args.method, excluded=excluded)
 
 
 if __name__ == "__main__":
