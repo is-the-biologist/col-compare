@@ -697,19 +697,13 @@ def print_comparison(
 
     print("\u2500" * len(header))
 
-    # Total before tax row
-    row = f"{'Total (pre-tax)':<{cat_width}}"
-    bt_vals: list[Optional[float]] = []
-    for loc in locations:
-        v = loc["income_before_tax"].get(family)
-        bt_vals.append(v)
-    for i, v in enumerate(bt_vals):
-        if v is not None:
-            row += f"{format_dollar(v):>{val_width}}"
-        else:
-            row += f"{'N/A':>{val_width}}"
-    if len(locations) >= 2 and bt_vals[0] is not None and bt_vals[1] is not None:
-        pd = pct_diff(bt_vals[0], bt_vals[1])
+    # Total row — use the running total which only includes active categories + taxes
+    label = "Total (pre-tax)" if not excluded else "Total (adjusted)"
+    row = f"{label:<{cat_width}}"
+    for i, t in enumerate(total_by_loc):
+        row += f"{format_dollar(t):>{val_width}}"
+    if len(locations) >= 2 and total_by_loc[0] > 0 and total_by_loc[1] > 0:
+        pd = pct_diff(total_by_loc[0], total_by_loc[1])
         row += f"{format_pct(pd) if pd is not None else 'N/A':>10}"
     print(row)
 
