@@ -9,7 +9,9 @@ Usage is within their stated 10-location fair-use policy.
 """
 
 import argparse
+import json
 import math
+import os
 import re
 import sys
 from typing import Optional
@@ -17,7 +19,30 @@ from typing import Optional
 import requests
 from bs4 import BeautifulSoup
 
-from locations import COUNTIES, METROS, STATES
+# Default database path (relative to this script)
+DEFAULT_DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "database", "locations_v1.json")
+
+# Module-level location dicts, populated by load_database()
+METROS: dict[str, str] = {}
+COUNTIES: dict[str, str] = {}
+STATES: dict[str, str] = {}
+
+
+def load_database(path: str = DEFAULT_DB_PATH) -> None:
+    """Load location database from a JSON file into module globals."""
+    global METROS, COUNTIES, STATES
+    try:
+        with open(path) as f:
+            data = json.load(f)
+    except FileNotFoundError:
+        print(f"Error: Database file not found: {path}", file=sys.stderr)
+        sys.exit(1)
+    except json.JSONDecodeError as e:
+        print(f"Error: Invalid JSON in database file {path}: {e}", file=sys.stderr)
+        sys.exit(1)
+    METROS = data.get("metros", {})
+    COUNTIES = data.get("counties", {})
+    STATES = data.get("states", {})
 
 # Family configuration labels: key -> (display name, column index in tables)
 FAMILY_KEYS = [
@@ -789,6 +814,10 @@ Examples:
             "engel (non-homothetic Engel curve)"
         ),
     )
+    parser.add_argument(
+        "--database", default=DEFAULT_DB_PATH, metavar="PATH",
+        help="Path to location database JSON file (default: database/locations_v1.json)",
+    )
 
     return parser
 
@@ -796,6 +825,8 @@ Examples:
 def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
+
+    load_database(args.database)
 
     if args.list:
         list_locations()

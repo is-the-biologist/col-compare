@@ -1,14 +1,6 @@
-"""Location database for the Cost of Living Comparison Tool.
-
-Maps CBSA codes to metro area names, FIPS codes to county names, and
-state FIPS codes to state names. These are the locations supported by
-MIT's Living Wage Calculator (https://livingwage.mit.edu).
-
-To add a location, find its code at the MIT site and add an entry to
-the appropriate dictionary below.
-"""
-
-METROS = {
+{
+  "version": 1,
+  "metros": {
     "10180": "Abilene, TX",
     "10420": "Akron, OH",
     "10500": "Albany, GA",
@@ -392,11 +384,9 @@ METROS = {
     "49620": "York-Hanover, PA",
     "49660": "Youngstown-Warren-Boardman, OH",
     "49700": "Yuba City, CA",
-    "49740": "Yuma, AZ",
-}
-
-COUNTIES = {
-    # New York
+    "49740": "Yuma, AZ"
+  },
+  "counties": {
     "36061": "New York County (Manhattan), NY",
     "36047": "Kings County (Brooklyn), NY",
     "36081": "Queens County, NY",
@@ -405,7 +395,6 @@ COUNTIES = {
     "36059": "Nassau County, NY",
     "36103": "Suffolk County, NY",
     "36119": "Westchester County, NY",
-    # California
     "06075": "San Francisco County, CA",
     "06037": "Los Angeles County, CA",
     "06073": "San Diego County, CA",
@@ -420,14 +409,12 @@ COUNTIES = {
     "06041": "Marin County, CA",
     "06097": "Sonoma County, CA",
     "06055": "Napa County, CA",
-    # Texas
     "48201": "Harris County (Houston), TX",
     "48113": "Dallas County, TX",
     "48029": "Bexar County (San Antonio), TX",
     "48439": "Tarrant County (Fort Worth), TX",
     "48453": "Travis County (Austin), TX",
     "48491": "Williamson County, TX",
-    # Florida
     "12086": "Miami-Dade County, FL",
     "12011": "Broward County (Fort Lauderdale), FL",
     "12099": "Palm Beach County, FL",
@@ -435,108 +422,120 @@ COUNTIES = {
     "12057": "Hillsborough County (Tampa), FL",
     "12103": "Pinellas County (St. Petersburg), FL",
     "12031": "Duval County (Jacksonville), FL",
-    # Illinois
     "17031": "Cook County (Chicago), IL",
     "17043": "DuPage County, IL",
     "17097": "Lake County, IL",
-    # Pennsylvania
     "42101": "Philadelphia County, PA",
     "42003": "Allegheny County (Pittsburgh), PA",
     "42091": "Montgomery County, PA",
-    # Massachusetts
     "25025": "Suffolk County (Boston), MA",
     "25017": "Middlesex County, MA",
     "25009": "Essex County, MA",
-    # Georgia
     "13121": "Fulton County (Atlanta), GA",
     "13089": "DeKalb County, GA",
     "13067": "Cobb County, GA",
-    # Washington
     "53033": "King County (Seattle), WA",
     "53053": "Pierce County (Tacoma), WA",
     "53061": "Snohomish County, WA",
-    # Colorado
     "08031": "Denver County, CO",
     "08005": "Arapahoe County, CO",
     "08035": "Douglas County, CO",
     "08059": "Jefferson County, CO",
-    # Arizona
     "04013": "Maricopa County (Phoenix), AZ",
     "04019": "Pima County (Tucson), AZ",
-    # Michigan
     "26163": "Wayne County (Detroit), MI",
     "26125": "Oakland County, MI",
     "26099": "Macomb County, MI",
-    # Ohio
     "39035": "Cuyahoga County (Cleveland), OH",
     "39049": "Franklin County (Columbus), OH",
     "39061": "Hamilton County (Cincinnati), OH",
-    # North Carolina
     "37183": "Wake County (Raleigh), NC",
     "37119": "Mecklenburg County (Charlotte), NC",
     "37063": "Durham County, NC",
-    # Virginia
     "51059": "Fairfax County, VA",
     "51013": "Arlington County, VA",
     "51107": "Loudoun County, VA",
     "51810": "Virginia Beach (city), VA",
-    # Maryland
     "24031": "Montgomery County, MD",
     "24005": "Baltimore County, MD",
     "24003": "Anne Arundel County, MD",
     "24033": "Prince George's County, MD",
-    # New Jersey
     "34013": "Essex County (Newark), NJ",
     "34023": "Middlesex County, NJ",
     "34003": "Bergen County, NJ",
     "34017": "Hudson County (Jersey City), NJ",
-    # Oregon
     "41051": "Multnomah County (Portland), OR",
     "41005": "Clackamas County, OR",
     "41067": "Washington County, OR",
-    # Minnesota
     "27053": "Hennepin County (Minneapolis), MN",
     "27123": "Ramsey County (St. Paul), MN",
-    # Missouri
     "29510": "St. Louis (city), MO",
     "29189": "St. Louis County, MO",
     "29095": "Jackson County (Kansas City), MO",
-    # Tennessee
     "47037": "Davidson County (Nashville), TN",
     "47157": "Shelby County (Memphis), TN",
-    # Connecticut
     "09001": "Fairfield County, CT",
     "09003": "Hartford County, CT",
     "09009": "New Haven County, CT",
-    # Indiana
     "18097": "Marion County (Indianapolis), IN",
-    # Wisconsin
     "55079": "Milwaukee County, WI",
     "55025": "Dane County (Madison), WI",
-    # Nevada
     "32003": "Clark County (Las Vegas), NV",
-    # Louisiana
     "22071": "Orleans Parish (New Orleans), LA",
-    # Hawaii
     "15003": "Honolulu County, HI",
-    # District of Columbia
-    "11001": "District of Columbia",
-}
-
-STATES = {
-    "01": "Alabama", "02": "Alaska", "04": "Arizona", "05": "Arkansas",
-    "06": "California", "08": "Colorado", "09": "Connecticut",
-    "10": "Delaware", "11": "District of Columbia", "12": "Florida",
-    "13": "Georgia", "15": "Hawaii", "16": "Idaho", "17": "Illinois",
-    "18": "Indiana", "19": "Iowa", "20": "Kansas", "21": "Kentucky",
-    "22": "Louisiana", "23": "Maine", "24": "Maryland", "25": "Massachusetts",
-    "26": "Michigan", "27": "Minnesota", "28": "Mississippi", "29": "Missouri",
-    "30": "Montana", "31": "Nebraska", "32": "Nevada", "33": "New Hampshire",
-    "34": "New Jersey", "35": "New Mexico", "36": "New York",
-    "37": "North Carolina", "38": "North Dakota", "39": "Ohio",
-    "40": "Oklahoma", "41": "Oregon", "42": "Pennsylvania",
-    "44": "Rhode Island", "45": "South Carolina", "46": "South Dakota",
-    "47": "Tennessee", "48": "Texas", "49": "Utah", "50": "Vermont",
-    "51": "Virginia", "53": "Washington", "54": "West Virginia",
-    "55": "Wisconsin", "56": "Wyoming",
+    "11001": "District of Columbia"
+  },
+  "states": {
+    "01": "Alabama",
+    "02": "Alaska",
+    "04": "Arizona",
+    "05": "Arkansas",
+    "06": "California",
+    "08": "Colorado",
+    "09": "Connecticut",
+    "10": "Delaware",
+    "11": "District of Columbia",
+    "12": "Florida",
+    "13": "Georgia",
+    "15": "Hawaii",
+    "16": "Idaho",
+    "17": "Illinois",
+    "18": "Indiana",
+    "19": "Iowa",
+    "20": "Kansas",
+    "21": "Kentucky",
+    "22": "Louisiana",
+    "23": "Maine",
+    "24": "Maryland",
+    "25": "Massachusetts",
+    "26": "Michigan",
+    "27": "Minnesota",
+    "28": "Mississippi",
+    "29": "Missouri",
+    "30": "Montana",
+    "31": "Nebraska",
+    "32": "Nevada",
+    "33": "New Hampshire",
+    "34": "New Jersey",
+    "35": "New Mexico",
+    "36": "New York",
+    "37": "North Carolina",
+    "38": "North Dakota",
+    "39": "Ohio",
+    "40": "Oklahoma",
+    "41": "Oregon",
+    "42": "Pennsylvania",
+    "44": "Rhode Island",
+    "45": "South Carolina",
+    "46": "South Dakota",
+    "47": "Tennessee",
+    "48": "Texas",
+    "49": "Utah",
+    "50": "Vermont",
+    "51": "Virginia",
+    "53": "Washington",
+    "54": "West Virginia",
+    "55": "Wisconsin",
+    "56": "Wyoming"
+  }
 }
