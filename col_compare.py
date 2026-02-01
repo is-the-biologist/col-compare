@@ -952,25 +952,92 @@ def parse_location_data(soup: BeautifulSoup) -> dict:
 # ---------------------------------------------------------------------------
 
 def compute_equivalent_income(
-    income_a: float, lw_before_tax_a: float, lw_before_tax_b: float
+    income_a: float,
+    lw_before_tax_a: float,
+    lw_before_tax_b: float,
+    method: str = "sqrt",
+    loc_a: Optional[dict] = None,
+    loc_b: Optional[dict] = None,
+    family: str = "1a0c",
 ) -> float:
     """Compute equivalent income in location B for someone earning income_a in A.
 
-    Uses blended approach:
-    - Living wage portion scales by full COL ratio
-    - Excess income scales by sqrt of COL ratio (dampened)
+    Methods:
+        linear     — Simple ratio: income * (lw_b / lw_a)
+        sqrt       — Living-wage portion scales fully, excess dampened by sqrt
+        log-linear — Constant elasticity: income * ratio^0.75
+        engel      — Non-homothetic Engel curve using per-category expense data
     """
     if lw_before_tax_a <= 0 or lw_before_tax_b <= 0:
         return income_a
 
     ratio = lw_before_tax_b / lw_before_tax_a
 
-    if income_a <= lw_before_tax_a:
+    if method == "linear":
         return income_a * ratio
+
+    elif method == "sqrt":
+        if income_a <= lw_before_tax_a:
+            return income_a * ratio
+        else:
+            base = lw_before_tax_b
+            excess = (income_a - lw_before_tax_a) * math.sqrt(ratio)
+            return base + excess
+
+    elif method == "log-linear":
+        elasticity = 0.75
+        return income_a * (ratio ** elasticity)
+
+    elif method == "engel":
+        if loc_a is None or loc_b is None:
+            # Fall back to sqrt if expense data unavailable
+            return compute_equivalent_income(
+                income_a, lw_before_tax_a, lw_before_tax_b, method="sqrt"
+            )
+
+        # Compute housing and non-housing expense totals for each location
+        housing_a = loc_a.get("expenses", {}).get("Housing", {}).get(family, 0.0)
+        housing_b = loc_b.get("expenses", {}).get("Housing", {}).get(family, 0.0)
+
+        non_housing_a = 0.0
+        non_housing_b = 0.0
+        for cat in EXPENSE_CATEGORIES:
+            if cat == "Housing":
+                continue
+            non_housing_a += loc_a.get("expenses", {}).get(cat, {}).get(family, 0.0)
+            non_housing_b += loc_b.get("expenses", {}).get(cat, {}).get(family, 0.0)
+
+        # Compute per-category ratios (guard against zero)
+        housing_ratio = (housing_b / housing_a) if housing_a > 0 else ratio
+        non_housing_ratio = (
+            (non_housing_b / non_housing_a) if non_housing_a > 0 else ratio
+        )
+
+        # Housing share at the living wage level
+        total_expenses_a = housing_a + non_housing_a
+        housing_share_at_lw = (
+            (housing_a / total_expenses_a) if total_expenses_a > 0 else 0.3
+        )
+
+        # Engel curve: housing share decreases with income
+        if lw_before_tax_a > 0 and income_a > 0:
+            housing_share = housing_share_at_lw * (
+                (lw_before_tax_a / income_a) ** 0.3
+            )
+        else:
+            housing_share = housing_share_at_lw
+
+        effective_ratio = (
+            housing_share * housing_ratio
+            + (1 - housing_share) * non_housing_ratio
+        )
+        return income_a * effective_ratio
+
     else:
-        base = lw_before_tax_b
-        excess = (income_a - lw_before_tax_a) * math.sqrt(ratio)
-        return base + excess
+        # Unknown method, fall back to sqrt
+        return compute_equivalent_income(
+            income_a, lw_before_tax_a, lw_before_tax_b, method="sqrt"
+        )
 
 
 def format_dollar(val: float) -> str:
@@ -998,10 +1065,19 @@ def pct_diff(a: float, b: float) -> Optional[float]:
 # Display
 # ---------------------------------------------------------------------------
 
+METHOD_LABELS = {
+    "linear": "Linear Ratio",
+    "sqrt": "Blended Square Root",
+    "log-linear": "Constant Elasticity (e=0.75)",
+    "engel": "Engel Curve (Non-Homothetic)",
+}
+
+
 def print_comparison(
     locations: list[dict],
     family: str,
     income: Optional[float] = None,
+    method: str = "sqrt",
 ) -> None:
     """Print a formatted comparison table."""
     family_label = FAMILY_LABELS.get(family, family)
@@ -1019,12 +1095,19 @@ def print_comparison(
         ref = locations[0]
         ref_bt = ref["income_before_tax"].get(family)
         if ref_bt:
-            print("INCOME EQUIVALENCE")
+            method_label = METHOD_LABELS.get(method, method)
+            print(f"INCOME EQUIVALENCE  [method: {method_label}]")
             print("-" * 60)
             for loc in locations[1:]:
                 loc_bt = loc["income_before_tax"].get(family)
                 if loc_bt:
-                    equiv = compute_equivalent_income(income, ref_bt, loc_bt)
+                    equiv = compute_equivalent_income(
+                        income, ref_bt, loc_bt,
+                        method=method,
+                        loc_a=ref,
+                        loc_b=loc,
+                        family=family,
+                    )
                     diff_pct = pct_diff(income, equiv)
                     direction = "less" if diff_pct and diff_pct < 0 else "more"
                     pct_str = f" ({abs(diff_pct):.1f}% {direction})" if diff_pct else ""
@@ -1230,6 +1313,17 @@ Examples:
         "--income", type=float, default=None,
         help="Annual income in first location for equivalence calculation",
     )
+    parser.add_argument(
+        "--method", default="sqrt",
+        choices=["linear", "sqrt", "log-linear", "engel"],
+        help=(
+            "Income equivalence method: "
+            "linear (simple ratio), "
+            "sqrt (blended square root, default), "
+            "log-linear (constant elasticity e=0.75), "
+            "engel (non-homothetic Engel curve)"
+        ),
+    )
 
     return parser
 
@@ -1288,7 +1382,7 @@ def main() -> None:
     if len(location_data) == 1:
         print_single_location(location_data[0], family)
     else:
-        print_comparison(location_data, family, income=args.income)
+        print_comparison(location_data, family, income=args.income, method=args.method)
 
 
 if __name__ == "__main__":

@@ -26,7 +26,15 @@ python col_compare.py --search "New York" "Atlanta"
 python col_compare.py --search "San Francisco" "Austin" --income 150000
 ```
 
-This shows what a $150,000 salary in San Francisco is equivalent to in Austin, using a blended scaling model where the living-wage portion scales by the full cost-of-living ratio and excess income scales by the square root of that ratio.
+This shows what a $150,000 salary in San Francisco is equivalent to in Austin. By default it uses the blended square-root method (see below).
+
+### Choose an income equivalence method
+
+```bash
+python col_compare.py --search "New York" "Atlanta" --income 150000 --method engel
+```
+
+Available methods: `linear`, `sqrt` (default), `log-linear`, `engel`. See [Income equivalence methods](#income-equivalence-methods) for details.
 
 ### Specify a family configuration
 
@@ -80,14 +88,51 @@ For each comparison, the tool displays:
 - **Required annual income** before and after taxes
 - **Percentage differences** between locations for each category
 
-## How income equivalence works
+## Income equivalence methods
 
-The tool uses a blended approach rather than a simple ratio:
+The `--method` flag controls how income is translated between locations. All methods use the required annual income before taxes from MIT's data as the cost-of-living anchor.
 
-1. The portion of income up to the living wage scales by the full cost-of-living ratio between locations.
-2. Income above the living wage scales by the *square root* of that ratio, reflecting the fact that discretionary spending differences are dampened compared to baseline cost differences.
+### `linear` — Simple Ratio
 
-This produces more realistic estimates than a flat multiplier.
+```
+equiv = income × (lw_b / lw_a)
+```
+
+Treats all income as equally location-sensitive. This is the approach used by most consumer COL calculators (CNN Money, BankRate, NerdWallet). Simple but tends to overstate differences at high incomes.
+
+**Source:** C2ER COLI methodology.
+
+### `sqrt` — Blended Square Root (default)
+
+```
+base  = lw_b
+excess = (income − lw_a) × √(lw_b / lw_a)
+equiv  = base + excess
+```
+
+The living-wage portion scales by the full COL ratio; income above the living wage scales by the square root of that ratio. This dampens the adjustment for higher earners whose marginal spending is less location-sensitive.
+
+### `log-linear` — Constant Elasticity
+
+```
+equiv = income × ratio^0.75    where ratio = lw_b / lw_a
+```
+
+Inspired by Mincerian log-linear wage equations. An elasticity of 0.75 means a 10% COL difference produces a ~7.5% income adjustment, capturing the empirical finding that wages don't fully compensate for COL differences.
+
+**Source:** Mincer (1974); BLS research on RPP-adjusted wages.
+
+### `engel` — Non-Homothetic / Engel Curve
+
+```
+housing_share(income) = housing_share_at_lw × (lw_a / income)^0.3
+effective_ratio = housing_share × housing_ratio + (1 − housing_share) × non_housing_ratio
+equiv = income × effective_ratio
+```
+
+Uses the actual per-category expense data to compute separate housing and non-housing cost ratios. Housing's share of the budget decreases with income (Engel's law applied to housing), so higher earners get a smaller COL adjustment since housing is typically the biggest driver of geographic price differences.
+
+**Source:** NBER WP 22816; ERI income-level-dependent differentials.
 
 ## Data source
 
