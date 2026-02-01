@@ -441,6 +441,17 @@ def parse_location_data(soup: BeautifulSoup) -> dict:
 # Comparison logic
 # ---------------------------------------------------------------------------
 
+def _adjust_living_wage(
+    lw: float, loc: Optional[dict], family: str, excluded: set[str]
+) -> float:
+    """Subtract excluded expense categories from a living-wage total."""
+    if not excluded or loc is None:
+        return lw
+    for cat in excluded:
+        lw -= loc.get("expenses", {}).get(cat, {}).get(family, 0.0)
+    return lw
+
+
 def compute_equivalent_income(
     income_a: float,
     lw_before_tax_a: float,
@@ -449,6 +460,7 @@ def compute_equivalent_income(
     loc_a: Optional[dict] = None,
     loc_b: Optional[dict] = None,
     family: str = "1a0c",
+    excluded: Optional[set[str]] = None,
 ) -> float:
     """Compute equivalent income in location B for someone earning income_a in A.
 
@@ -457,21 +469,30 @@ def compute_equivalent_income(
         sqrt       — Living-wage portion scales fully, excess dampened by sqrt
         log-linear — Constant elasticity: income * ratio^0.75
         engel      — Non-homothetic Engel curve using per-category expense data
+
+    When categories are excluded, their expenses are subtracted from the
+    living-wage anchors so the ratio reflects only the included categories.
     """
-    if lw_before_tax_a <= 0 or lw_before_tax_b <= 0:
+    excluded = excluded or set()
+
+    # Adjust living-wage anchors by removing excluded category expenses
+    adj_a = _adjust_living_wage(lw_before_tax_a, loc_a, family, excluded)
+    adj_b = _adjust_living_wage(lw_before_tax_b, loc_b, family, excluded)
+
+    if adj_a <= 0 or adj_b <= 0:
         return income_a
 
-    ratio = lw_before_tax_b / lw_before_tax_a
+    ratio = adj_b / adj_a
 
     if method == "linear":
         return income_a * ratio
 
     elif method == "sqrt":
-        if income_a <= lw_before_tax_a:
+        if income_a <= adj_a:
             return income_a * ratio
         else:
-            base = lw_before_tax_b
-            excess = (income_a - lw_before_tax_a) * math.sqrt(ratio)
+            base = adj_b
+            excess = (income_a - adj_a) * math.sqrt(ratio)
             return base + excess
 
     elif method == "log-linear":
@@ -482,17 +503,25 @@ def compute_equivalent_income(
         if loc_a is None or loc_b is None:
             # Fall back to sqrt if expense data unavailable
             return compute_equivalent_income(
-                income_a, lw_before_tax_a, lw_before_tax_b, method="sqrt"
+                income_a, lw_before_tax_a, lw_before_tax_b,
+                method="sqrt", excluded=excluded,
             )
 
         # Compute housing and non-housing expense totals for each location
-        housing_a = loc_a.get("expenses", {}).get("Housing", {}).get(family, 0.0)
-        housing_b = loc_b.get("expenses", {}).get("Housing", {}).get(family, 0.0)
+        housing_excluded = "Housing" in excluded
+        housing_a = (
+            0.0 if housing_excluded
+            else loc_a.get("expenses", {}).get("Housing", {}).get(family, 0.0)
+        )
+        housing_b = (
+            0.0 if housing_excluded
+            else loc_b.get("expenses", {}).get("Housing", {}).get(family, 0.0)
+        )
 
         non_housing_a = 0.0
         non_housing_b = 0.0
         for cat in EXPENSE_CATEGORIES:
-            if cat == "Housing":
+            if cat == "Housing" or cat in excluded:
                 continue
             non_housing_a += loc_a.get("expenses", {}).get(cat, {}).get(family, 0.0)
             non_housing_b += loc_b.get("expenses", {}).get(cat, {}).get(family, 0.0)
@@ -510,9 +539,9 @@ def compute_equivalent_income(
         )
 
         # Engel curve: housing share decreases with income
-        if lw_before_tax_a > 0 and income_a > 0:
+        if adj_a > 0 and income_a > 0:
             housing_share = housing_share_at_lw * (
-                (lw_before_tax_a / income_a) ** 0.3
+                (adj_a / income_a) ** 0.3
             )
         else:
             housing_share = housing_share_at_lw
@@ -526,7 +555,8 @@ def compute_equivalent_income(
     else:
         # Unknown method, fall back to sqrt
         return compute_equivalent_income(
-            income_a, lw_before_tax_a, lw_before_tax_b, method="sqrt"
+            income_a, lw_before_tax_a, lw_before_tax_b,
+            method="sqrt", excluded=excluded,
         )
 
 
@@ -568,8 +598,12 @@ def print_comparison(
     family: str,
     income: Optional[float] = None,
     method: str = "sqrt",
+    excluded: Optional[set[str]] = None,
 ) -> None:
     """Print a formatted comparison table."""
+    excluded = excluded or set()
+    active_categories = [c for c in EXPENSE_CATEGORIES if c not in excluded]
+
     family_label = FAMILY_LABELS.get(family, family)
     names = [loc["name"] for loc in locations]
 
@@ -578,6 +612,8 @@ def print_comparison(
     print("=" * 60)
     print("  vs  ".join(names))
     print(f"Family type: {family_label}")
+    if excluded:
+        print(f"Excluded:    {', '.join(sorted(excluded))}")
     print()
 
     # --- Headline income equivalence ---
@@ -597,6 +633,7 @@ def print_comparison(
                         loc_a=ref,
                         loc_b=loc,
                         family=family,
+                        excluded=excluded,
                     )
                     diff_pct = pct_diff(income, equiv)
                     direction = "less" if diff_pct and diff_pct < 0 else "more"
@@ -624,7 +661,7 @@ def print_comparison(
 
     total_by_loc: list[float] = [0.0] * len(locations)
 
-    for cat in EXPENSE_CATEGORIES:
+    for cat in active_categories:
         row = f"{cat:<{cat_width}}"
         vals: list[Optional[float]] = []
         for loc in locations:
@@ -693,13 +730,22 @@ def print_comparison(
     print()
 
 
-def print_single_location(loc: dict, family: str) -> None:
+def print_single_location(
+    loc: dict,
+    family: str,
+    excluded: Optional[set[str]] = None,
+) -> None:
     """Print data for a single location."""
+    excluded = excluded or set()
+    active_categories = [c for c in EXPENSE_CATEGORIES if c not in excluded]
+
     family_label = FAMILY_LABELS.get(family, family)
     print()
     print(f"Living Wage Data: {loc['name']}")
     print("=" * 50)
     print(f"Family type: {family_label}")
+    if excluded:
+        print(f"Excluded:    {', '.join(sorted(excluded))}")
     print()
 
     wage = loc["wages"].get(family)
@@ -716,7 +762,7 @@ def print_single_location(loc: dict, family: str) -> None:
 
     print()
     print("  Annual Expenses:")
-    for cat in EXPENSE_CATEGORIES:
+    for cat in active_categories:
         v = loc["expenses"].get(cat, {}).get(family)
         if v is not None:
             print(f"    {cat:<22} {format_dollar(v)}")
@@ -815,11 +861,36 @@ Examples:
         ),
     )
     parser.add_argument(
+
+        "--exclude", nargs="+", metavar="CATEGORY",
+        help=(
+            "Exclude one or more expense categories from the comparison. "
+            "Available categories: "
+            + ", ".join(EXPENSE_CATEGORIES)
+        ),
+
         "--database", default=DEFAULT_DB_PATH, metavar="PATH",
         help="Path to location database JSON file (default: database/locations_v1.json)",
     )
 
     return parser
+
+
+def resolve_excluded_categories(raw: list[str]) -> set[str]:
+    """Resolve user-provided category names to canonical EXPENSE_CATEGORIES names.
+
+    Matching is case-insensitive. Exits with an error for unrecognized names.
+    """
+    lookup = {cat.lower(): cat for cat in EXPENSE_CATEGORIES}
+    resolved: set[str] = set()
+    for name in raw:
+        canon = lookup.get(name.lower())
+        if canon is None:
+            print(f"Error: Unknown expense category '{name}'.")
+            print(f"Available categories: {', '.join(EXPENSE_CATEGORIES)}")
+            sys.exit(1)
+        resolved.add(canon)
+    return resolved
 
 
 def main() -> None:
@@ -875,10 +946,11 @@ def main() -> None:
 
     # Display
     family = args.family
+    excluded = resolve_excluded_categories(args.exclude) if args.exclude else set()
     if len(location_data) == 1:
-        print_single_location(location_data[0], family)
+        print_single_location(location_data[0], family, excluded=excluded)
     else:
-        print_comparison(location_data, family, income=args.income, method=args.method)
+        print_comparison(location_data, family, income=args.income, method=args.method, excluded=excluded)
 
 
 if __name__ == "__main__":
