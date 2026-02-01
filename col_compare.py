@@ -709,14 +709,20 @@ def print_comparison(
 
     print()
 
-    # Living wage
-    row = f"{'Living Wage':<{cat_width}}"
-    for loc in locations:
-        w = loc["wages"].get(family)
-        if w is not None:
-            row += f"{'${:.2f}/hr'.format(w):>{val_width}}"
-        else:
-            row += f"{'N/A':>{val_width}}"
+    # Living wage — recalculate from running total when categories are excluded
+    label = "Living Wage" if not excluded else "Adj. Living Wage"
+    row = f"{label:<{cat_width}}"
+    if excluded:
+        for t in total_by_loc:
+            hourly = t / 2080 if t > 0 else 0.0
+            row += f"{'${:.2f}/hr'.format(hourly):>{val_width}}"
+    else:
+        for loc in locations:
+            w = loc["wages"].get(family)
+            if w is not None:
+                row += f"{'${:.2f}/hr'.format(w):>{val_width}}"
+            else:
+                row += f"{'N/A':>{val_width}}"
     print(row)
 
     print()
@@ -742,16 +748,30 @@ def print_single_location(
         print(f"Excluded:    {', '.join(sorted(excluded))}")
     print()
 
-    wage = loc["wages"].get(family)
-    if wage is not None:
-        print(f"  Living Wage: ${wage:.2f}/hr")
+    # Compute running total of active categories + taxes for adjusted figures
+    running_total = 0.0
+    for cat in active_categories:
+        v = loc["expenses"].get(cat, {}).get(family)
+        if v is not None:
+            running_total += v
+    tax = loc["taxes"].get(family)
+    if tax is not None:
+        running_total += tax
 
-    bt = loc["income_before_tax"].get(family)
-    if bt is not None:
-        print(f"  Required Annual Income (before tax): {format_dollar(bt)}")
+    if excluded:
+        adj_hourly = running_total / 2080 if running_total > 0 else 0.0
+        print(f"  Adj. Living Wage: ${adj_hourly:.2f}/hr")
+        print(f"  Adjusted Annual Income (before tax): {format_dollar(running_total)}")
+    else:
+        wage = loc["wages"].get(family)
+        if wage is not None:
+            print(f"  Living Wage: ${wage:.2f}/hr")
+        bt = loc["income_before_tax"].get(family)
+        if bt is not None:
+            print(f"  Required Annual Income (before tax): {format_dollar(bt)}")
 
     at = loc["income_after_tax"].get(family)
-    if at is not None:
+    if at is not None and not excluded:
         print(f"  Required Annual Income (after tax):  {format_dollar(at)}")
 
     print()
@@ -761,7 +781,6 @@ def print_single_location(
         if v is not None:
             print(f"    {cat:<22} {format_dollar(v)}")
 
-    tax = loc["taxes"].get(family)
     if tax is not None:
         print(f"    {'Taxes':<22} {format_dollar(tax)}")
 
