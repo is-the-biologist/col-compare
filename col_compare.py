@@ -863,12 +863,12 @@ Examples:
         help="Annual income in first location for equivalence calculation",
     )
     parser.add_argument(
-        "--method", default="sqrt",
+        "--method", default="linear",
         choices=["linear", "sqrt", "log-linear", "engel"],
         help=(
             "Income equivalence method: "
-            "linear (simple ratio), "
-            "sqrt (blended square root, default), "
+            "linear (simple ratio, default), "
+            "sqrt (blended square root), "
             "log-linear (constant elasticity e=0.75), "
             "engel (non-homothetic Engel curve)"
         ),
